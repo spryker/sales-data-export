@@ -1,12 +1,15 @@
 <?php
 
-namespace Spryker\Zed\SalesDataExport\Business\Reader;
+/**
+ * Copyright © 2016-present Spryker Systems GmbH. All rights reserved.
+ * Use of this software requires acceptance of the Evaluation License Agreement. See LICENSE file.
+ */
 
-use Orm\Zed\Sales\Persistence\SpySalesOrderItemQuery;
+namespace Spryker\Zed\SalesDataExport\Persistence\Propel\Mapper;
 
-class OrderItemReader
+class SalesOrderItemMapper
 {
-    protected $mapping = [
+    protected $csvMapping = [
         'order_reference' => 'Order.OrderReference',
         'product_name' => 'SpySalesOrderItem.Name',
         'product_sku' => 'SpySalesOrderItem.Sku',
@@ -66,56 +69,35 @@ class OrderItemReader
         'shipping_address_region' => 'Region.Name',
     ];
 
-    public function csvReadBatch(array $exportConfiguration, $offset, $limit) : array
+    /**
+     * @return array<string, string>
+     */
+    public function getCsvMapping(): array
     {
-            $orderItems = SpySalesOrderItemQuery::create()
-                ->joinOrder()
-                ->joinState()
-                ->leftJoinProcess()
-                ->leftJoinSalesOrderItemBundle()
-                ->leftJoinSpySalesShipment()
-                ->useSpySalesShipmentQuery()
-                    ->leftJoinSpySalesOrderAddress()
-                    ->useSpySalesOrderAddressQuery()
-                        ->leftJoinCountry()
-                        ->leftJoinRegion()
-                    ->endUse()
-                ->endUse()
-                ->offset($offset)
-                ->limit($limit);
+        return $this->csvMapping;
+    }
 
+    /**
+     * @param array $salesOrderData
+     *
+     * @return array
+     */
+    public function mapSalesOrderItemDataToCsvFormattedArray(array $salesOrderData): array
+    {
+        $csvHeader = $this->getCsvHeader();
+        $salesOrderCsvFormattedData = [];
+        foreach ($salesOrderData as $salesOrderRow) {
+            $salesOrderCsvFormattedData[] = array_combine($csvHeader, $salesOrderRow);
+        }
 
-            if (isset($exportConfiguration['filter_criteria']['order_store'])) {
-                $orderItems
-                    ->useOrderQuery()
-                        ->filterByStore_In($exportConfiguration['filter_criteria']['order_store'])
-                    ->endUse();
-            }
+        return $salesOrderCsvFormattedData;
+    }
 
-            if (isset($exportConfiguration['filter_criteria']['order_created_at'])) {
-                $orderItems
-                    ->useOrderQuery()
-                        ->filterByCreatedAt_Between([
-                            'min' => $exportConfiguration['filter_criteria']['order_created_at']['from'],
-                            'max' => $exportConfiguration['filter_criteria']['order_created_at']['to']
-                        ])
-                    ->endUse();
-            }
-
-            $selectedFields = array_intersect_key($this->mapping, array_flip($exportConfiguration['fields']));
-            $orderItems->select($selectedFields);
-            $orderItems = $orderItems->find()->toArray();
-
-            foreach($orderItems as &$orderItem) {
-                foreach($selectedFields as $niceName => $propelName) {
-                    $orderItem[$niceName] = $orderItem[$propelName];
-                    unset($orderItem[$propelName]);
-                }
-            }
-
-            return [
-                count($orderItems) > 0 ? array_keys($orderItems[0]) : [],
-                $orderItems,
-            ];
+    /**
+     * @return string[]
+     */
+    protected function getCsvHeader(): array
+    {
+        return array_keys($this->csvMapping);
     }
 }
